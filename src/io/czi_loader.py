@@ -1,19 +1,35 @@
-import matplotlib
-matplotlib.use("TkAgg")  # ⚠️ esențial pentru ferestre externe
-
+import numpy as np
 import matplotlib.pyplot as plt
 from aicsimageio import AICSImage
+from pathlib import Path
 
+def display_all_slices_separate_windows_rgb_mapping(file_path: str):
+    img = AICSImage(file_path)
+    data = img.get_image_data("TCZYX", S=0)  # shape: (T, C, Z, Y, X)
 
-def display_all_slices(path):
-    img = AICSImage(path)
-    data = img.get_image_data("ZCYX", T=0)  # [Z, C, Y, X]
+    colors = {
+        0: (0, 0, 1),  # Albastru - neuroni
+        1: (0, 1, 0),  # Verde - citoplasmă
+        2: (1, 0, 0),  # Roșu - dendrite
+    }
 
-    z_dim = data.shape[0]
-    for z in range(z_dim):
-        slice_img = data[z, 0, :, :]  # canal 0
-        plt.figure()
-        plt.imshow(slice_img, cmap="gray")
-        plt.title(f"Slice {z} din {path}")
-        plt.axis("off")
-        plt.show()
+    for t in range(data.shape[0]):
+        for c in range(data.shape[1]):
+            for z in range(data.shape[2]):
+                slice_2d = data[t, c, z]
+
+                # Normalizare și conversie în RGB
+                rgb = np.zeros((*slice_2d.shape, 3), dtype=np.float32)
+                if slice_2d.max() > 0:
+                    norm_slice = slice_2d / slice_2d.max()
+                else:
+                    norm_slice = slice_2d
+
+                for i in range(3):
+                    rgb[..., i] = norm_slice * colors.get(c, (1, 1, 1))[i]
+
+                plt.figure()
+                plt.imshow(rgb)
+                plt.title(f"{Path(file_path).name} - T={t}, C={c}, Z={z}")
+                plt.axis("off")
+                plt.show(block=False)
