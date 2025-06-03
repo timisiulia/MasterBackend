@@ -14,9 +14,16 @@ def sholl_analysis(image=None, image_path: str = None, soma_coords: tuple = None
 
     binary = image > 0
 
+    if np.sum(binary) == 0:
+        print("⚠️ Imagine binară goală – se întrerupe analiza Sholl.")
+        return 0, 0
+
     if soma_coords is None:
         labeled_img = measure.label(binary)
         regions = measure.regionprops(labeled_img)
+        if not regions:
+            print("⚠️ Nu a fost detectată nicio regiune pentru soma.")
+            return 0, 0
         largest_region = max(regions, key=lambda r: r.area)
         soma_coords = tuple(map(int, largest_region.centroid[::-1]))
 
@@ -29,19 +36,22 @@ def sholl_analysis(image=None, image_path: str = None, soma_coords: tuple = None
         overlap = skeleton & circle
         intersections.append(np.count_nonzero(overlap))
 
-    # Fit polinomial de gradul 20
-    degree = 20
-    coeffs = np.polyfit(radii, intersections, degree)
-    poly_fit = np.poly1d(coeffs)
-    radii_fine = np.linspace(min(radii), max(radii), 500)
-    intersections_fine = poly_fit(radii_fine)
+    if len(intersections) > 1:
+        degree = min(20, len(intersections) - 1)
+        coeffs = np.polyfit(radii, intersections, degree)
+        poly_fit = np.poly1d(coeffs)
+        radii_fine = np.linspace(min(radii), max(radii), 500)
+        intersections_fine = poly_fit(radii_fine)
+    else:
+        radii_fine = radii
+        intersections_fine = intersections
 
     fig, axs = plt.subplots(1, 2, figsize=(12, 5))
     axs[0].imshow(binary, cmap="gray")
     axs[0].scatter(*soma_coords[::-1], c='red', s=40)
     axs[0].set_title("Segmentare + Soma")
     axs[1].plot(radii, intersections, 'o', label='Date brute')
-    axs[1].plot(radii_fine, intersections_fine, '-', label=f'Fit grad {degree}', color='blue')
+    axs[1].plot(radii_fine, intersections_fine, '-', label='Fit polinomial', color='blue')
     axs[1].set_title("Sholl Analysis")
     axs[1].set_xlabel("Rază (pixeli)")
     axs[1].set_ylabel("Nr. Intersecții")
@@ -54,6 +64,8 @@ def sholl_analysis(image=None, image_path: str = None, soma_coords: tuple = None
         plt.savefig(save_path)
     else:
         plt.show()
+
+    return max(intersections), sum(intersections)
 
 
 def _create_circle_mask(shape, center, radius):
