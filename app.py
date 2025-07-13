@@ -89,17 +89,42 @@ def index():
 
 @app.route("/images", methods=["GET"])
 def get_all_images():
-    image_list = []
-    for filename in os.listdir(OUTPUT_DIR):
-        if filename.endswith(".png"):
-            file_path = os.path.join(OUTPUT_DIR, filename)
-            with open(file_path, "rb") as f:
-                encoded = base64.b64encode(f.read()).decode("utf-8")
-                image_list.append({
-                    "filename": filename,
-                    "data": f"data:image/png;base64,{encoded}"
-                })
-    return jsonify(image_list)
+    images_by_roi = {}
+    full_rgb_image = None
+
+    for root, dirs, files in os.walk(OUTPUT_DIR):
+        png_files = [f for f in files if f.endswith(".png")]
+        if png_files:
+            roi_name = os.path.relpath(root, OUTPUT_DIR)
+
+            for filename in png_files:
+                file_path = os.path.join(root, filename)
+
+                with open(file_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode("utf-8")
+                    image_data = {
+                        "filename": filename,
+                        "description": f"Reprezintă rezultatul pentru ROI: {roi_name}",
+                        "data": f"data:image/png;base64,{encoded}"
+                    }
+
+                    # dacă este full_rgb.png și e în directorul principal
+                    if filename == "full_rgb.png" and roi_name == ".":
+                        full_rgb_image = {
+                            "filename": filename,
+                            "description": "Imagine RGB completă",
+                            "data": f"data:image/png;base64,{encoded}"
+                        }
+                    else:
+                        if roi_name not in images_by_roi:
+                            images_by_roi[roi_name] = []
+                        images_by_roi[roi_name].append(image_data)
+
+    return jsonify({
+        "full_rgb": full_rgb_image,
+        "images_by_roi": images_by_roi
+    })
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=8000)
